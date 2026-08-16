@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puffer | EDA Schematic Editor</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/darcula.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; width: 100vw; overflow: hidden; background: #0d1117; }
+        
+        #editor-container { width: 450px; min-width: 450px; height: 100vh; display: flex; flex-direction: column; background-color: #1e1e1e; border-right: 2px solid #000; z-index: 100; }
+        .top-bar { height: 50px; min-height: 50px; background: #007acc; color: white; display: flex; align-items: center; padding: 0 15px; font-size: 16px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; gap: 10px; }
+
+        .CodeMirror { flex-grow: 1; height: auto; font-family: 'Consolas', monospace; font-size: 15px; padding-top: 10px; }
+        .cm-s-darcula span.cm-puffer-arrow { color: #c586c0; font-weight: bold; }
+        .cm-s-darcula span.cm-puffer-component { color: #4ec9b0; font-weight: bold; }
+        .cm-s-darcula span.cm-puffer-pin { color: #9cdcfe; }
+        .cm-s-darcula span.cm-puffer-color { color: #ce9178; }
+
+        /* --- DIAGRAM CANVAS --- */
+        #viewer-container { 
+            flex: 1; height: 100vh; position: relative; overflow: hidden; 
+            background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px); 
+            background-position: 100px 50px; 
+            cursor: grab;
+            user-select: none; -webkit-user-select: none;
+        }
+        #viewer-container:active { cursor: grabbing; }
+        svg { display: block; width: 100%; height: 100%; pointer-events: auto; }
+        
+        .component-group { cursor: pointer; transition: filter 0.2s; }
+        .component-group:hover { filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.6)); }
+        
+        /* Wire interactions */
+        .wire-group { cursor: pointer; }
+        .wire-hitbox { fill: none; stroke: transparent; stroke-width: 25px; stroke-linecap: butt; }
+        
+        /* Dynamic Cursors */
+        .wire-seg-v { cursor: col-resize; } 
+        .wire-seg-h { cursor: row-resize; } 
+        .wire-seg-c { cursor: move; }       
+        
+        .wire-visible { pointer-events: none; transition: filter 0.1s, stroke-width 0.1s; }
+        .wire-group:hover .wire-visible { filter: drop-shadow(0 0 6px rgba(255,255,255,0.8)); stroke-width: 4.5px; }
+
+        .pin-label { font-family: 'Consolas', monospace; font-size: 11px; fill: #e2e8f0; font-weight: bold; pointer-events: none; }
+        .component-label { font-family: sans-serif; font-size: 16px; font-weight: bold; fill: #fff; pointer-events: none; }
+        .value-label { font-family: 'Consolas', monospace; font-size: 14px; fill: #fbbf24; font-weight: bold; pointer-events: none; }
+
+        /* Floating UI */
+        #top-right-controls { position: absolute; top: 20px; right: 30px; z-index: 10; display: flex; gap: 10px; }
+        .icon-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-size: 18px; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .icon-btn:hover { background: #30363d; color: #fff; }
+
+        #zoom-controls { position: absolute; bottom: 30px; right: 30px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; display: flex; z-index: 10; }
+        .zoom-btn { background: none; border: none; color: #c9d1d9; font-size: 20px; font-weight: bold; padding: 10px 15px; cursor: pointer; border-right: 1px solid #30363d; transition: background 0.2s; }
+        .zoom-btn:last-child { border-right: none; font-size: 14px; }
+        .zoom-btn:hover { background: #30363d; color: #fff; }
+
+        /* Context Menu */
+        #context-menu { position: absolute; display: none; background: #252526; border: 1px solid #454545; box-shadow: 2px 2px 10px rgba(0,0,0,0.5); border-radius: 6px; z-index: 1000; padding: 5px 0; color: #d4d4d4; font-size: 14px; min-width: 190px; }
+        .menu-item { padding: 10px 15px; cursor: pointer; display: flex; gap: 12px; align-items: center; }
+        .menu-item:hover { background: #007acc; color: white; }
+    </style>
+</head>
+<body>
+
+    <div id="editor-container">
+        <div class="top-bar"><i class="fa-solid fa-microchip"></i> Puffer EDA Editor</div>
+        <textarea id="code">
+// 1. Define Components
+uno = SIM800L
+lcd = I2C_LCD
+sd = Micro_SD
+buck = LM2596_Buck
+vcc = VCC
+gnd = GND
+
+// 2. Wiring
+// Use commas to join multiple lines to a single pin!
+// Right Click components to Rotate 90° or Flip!
+
+uno.5V -> buck.IN+ : red
+uno.GND_1 -> buck.IN- : #10b981
+
+buck.OUT+ -> lcd.VCC, sd.VCC, vcc.OUT : red
+buck.OUT- -> lcd.GND, sd.GND, gnd.IN : #10b981
+
+uno.A4 -> lcd.SDA : #38bdf8
+uno.A5 -> lcd.SCL : #f59e0b
+
+uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
+        </textarea>
+    </div>
+
+    <div id="viewer-container">
+        <div id="top-right-controls">
+            <button class="icon-btn" onclick="toggleWireStyle()" title="Toggle Wire Style"><i id="wire-style-icon" class="fa-solid fa-route"></i></button>
+        </div>
+        <div id="zoom-controls">
+            <button class="zoom-btn" onclick="zoom(0.2)"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+            <button class="zoom-btn" onclick="zoom(-0.2)"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+            <button class="zoom-btn" onclick="resetZoom()">Reset</button>
+        </div>
+        <svg id="canvas"><g id="zoom-layer" transform="translate(100,50) scale(1)"></g></svg>
+    </div>
+
+    <!-- Right-Click Context Menu -->
+    <div id="context-menu">
+        <div class="menu-item comp-menu" id="menu-rotate"><i class="fa-solid fa-rotate-right"></i> Rotate 90°</div>
+        <div class="menu-item comp-menu" id="menu-flip-h"><i class="fa-solid fa-left-right"></i> Flip Horizontally</div>
+        <div class="menu-item comp-menu" id="menu-flip-v"><i class="fa-solid fa-up-down"></i> Flip Vertically</div>
+        <div class="menu-item wire-menu" id="menu-add-bend"><i class="fa-solid fa-code-fork"></i> Add Corner / Bend</div>
+        <div class="menu-item wire-menu" id="menu-straighten-wire"><i class="fa-solid fa-compress"></i> Reset Route</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/mode/simple.min.js"></script>
+
+    <script type="module">
+        import { ESP32_devkit_v1 } from './libraries/esp32_devkit_v1.js';
+        import { STM32_Bluepill } from './libraries/stm32_bluepill.js';
+        import { CoreComponents } from './libraries/core_components.js';
+        
+        import { Arduino_Uno } from './libraries/arduino_uno.js';
+        import { LM2596_Buck } from './libraries/lm2596.js';
+        import { HX711 } from './libraries/hx711.js';
+        import { I2C_LCD } from './libraries/i2c_lcd.js';
+        import { SIM800L } from './libraries/sim800l.js';
+        import { Micro_SD } from './libraries/micro_sd.js';
+
+        CodeMirror.defineSimpleMode("puffer", {
+            start: [
+                {regex: /\/\/.*/, token: "comment"}, {regex: /->/, token: "puffer-arrow"},
+                {regex: /:\s*(#[0-9a-fA-F]{3,6}|[a-zA-Z]+)/, token: "puffer-color"},
+                {regex: /\b(ESP32_devkit_v1|STM32_Bluepill|Resistor|LED|GND|VCC|Capacitor|NPN_Transistor|N_MOSFET|Antenna|Arduino_Uno|LM2596_Buck|HX711|I2C_LCD|SIM800L|Micro_SD)\b/, token: "puffer-component"},
+                {regex: /[a-zA-Z_0-9]+\.[a-zA-Z_0-9\+\-]+/, token: "puffer-pin"}
+            ]
+        });
+
+        const cmEditor = CodeMirror.fromTextArea(document.getElementById("code"), { lineNumbers: true, theme: "darcula", mode: "puffer", indentUnit: 4, viewportMargin: Infinity });
+
+        function getResistorColors(valStr) {
+            let val = parseFloat(valStr.replace(/[kKmMΩ]/g, ''));
+            if (isNaN(val)) return ['#dc2626', '#dc2626', '#78350f']; 
+            if (valStr.toLowerCase().includes('k')) val *= 1000; if (valStr.toLowerCase().includes('m')) val *= 1000000;
+            const cMap = ['#000', '#78350f', '#dc2626', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#6b7280', '#fff'];
+            let exp = Math.floor(Math.log10(val)) - 1; let sig = Math.round(val / Math.pow(10, exp)); if (val < 10) { sig = val * 10; exp = -1; } 
+            return [cMap[Math.floor(sig/10)]||cMap[0], cMap[sig%10]||cMap[0], (exp>=0&&exp<=9)?cMap[exp]:'#ca8a04'];
+        }
+
+        const BasicLibrary = {
+            LED: {
+                width: 60, height: 40,
+                svg: `<line x1="0" y1="20" x2="15" y2="20" stroke="#94a3b8" stroke-width="2.5"/><line x1="35" y1="20" x2="60" y2="20" stroke="#94a3b8" stroke-width="2.5"/><path d="M 15 10 L 15 30 L 35 20 Z" fill="#ef4444" stroke="#b91c1c" stroke-width="2"/><line x1="35" y1="10" x2="35" y2="30" stroke="#b91c1c" stroke-width="3"/><text x="5" y="38" class="value-label" font-size="16">+</text><text x="45" y="38" class="value-label" font-size="16">-</text>`,
+                pins: { "+": { x: 0, y: 20 }, "-": { x: 60, y: 20 } }
+            },
+            Resistor: {
+                width: 100, height: 45,
+                svg: (arg) => {
+                    let valStr = arg ? arg : "220"; let bands = getResistorColors(valStr);
+                    return `<line x1="0" y1="15" x2="25" y2="15" stroke="#94a3b8" stroke-width="3"/><line x1="75" y1="15" x2="100" y2="15" stroke="#94a3b8" stroke-width="3"/><rect x="20" y="5" width="60" height="20" rx="2" fill="#eab308" stroke="#a16207" stroke-width="1.5"/><rect x="30" y="5" width="5" height="20" fill="${bands[0]}"/><rect x="42" y="5" width="5" height="20" fill="${bands[1]}"/><rect x="54" y="5" width="5" height="20" fill="${bands[2]}"/><rect x="68" y="5" width="3" height="20" fill="#ca8a04"/><text x="50" y="42" class="value-label" text-anchor="middle">${valStr}Ω</text>`;
+                },
+                pins: { "IN": { x: 0, y: 15 }, "OUT": { x: 100, y: 15 } }
+            }
+        };
+
+        const Library = { 
+            ESP32_devkit_v1, STM32_Bluepill, 
+            Arduino_Uno, LM2596_Buck, HX711, I2C_LCD, SIM800L, Micro_SD,
+            ...CoreComponents, ...BasicLibrary 
+        };
+        
+        let currentAST = { nodes: {}, edges: [] };
+        let customPositions = {}; 
+        let customWireRoutes = {}; 
+        let wireStyle = 'orthogonal';
+        
+        let currentScale = 1; let panX = 100, panY = 50;
+
+        window.toggleWireStyle = () => { 
+            wireStyle = wireStyle === 'curve' ? 'orthogonal' : 'curve'; 
+            document.getElementById('wire-style-icon').className = wireStyle === 'curve' ? 'fa-solid fa-bezier-curve' : 'fa-solid fa-route'; 
+            render(currentAST); 
+        };
+        window.zoom = (amount) => { currentScale = Math.max(0.2, Math.min(3, currentScale + amount)); updateTransform(); };
+        window.resetZoom = () => { currentScale = 1; panX = 100; panY = 50; updateTransform(); };
+        function updateTransform() { 
+            document.getElementById('zoom-layer').setAttribute('transform', `translate(${panX}, ${panY}) scale(${currentScale})`); 
+            const viewer = document.getElementById('viewer-container');
+            viewer.style.backgroundPosition = `${panX}px ${panY}px`; viewer.style.backgroundSize = `${25 * currentScale}px ${25 * currentScale}px`;
+        }
+
+        function resolvePin(compDef, pinQuery) {
+            if (compDef.pins[pinQuery]) return { name: pinQuery, data: compDef.pins[pinQuery] };
+            for (const [key, data] of Object.entries(compDef.pins)) { if (data.aliases && data.aliases.includes(pinQuery)) return { name: key, data: data }; } return null;
+        }
+
+        function parseScript(code) {
+            const lines = code.split('\n'); const nodes = {}; const edges = [];
+            lines.forEach(line => {
+                line = line.trim(); if (!line || line.startsWith('//')) return;
+                
+                if (line.includes('=')) {
+                    let [id, typeStr] = line.split('=').map(s => s.trim()); let type = typeStr, arg = null;
+                    if (typeStr.includes('(')) { let match = typeStr.match(/(.+)\((.+)\)/); if (match) { type = match[1].trim(); arg = match[2].trim(); } }
+                    if (Library[type]) nodes[id] = { id, type, arg, def: Library[type] };
+                } else if (line.includes('->')) {
+                    let color = "#58a6ff"; if (line.includes(':')) { const parts = line.split(':'); color = parts[1].trim(); line = parts[0].trim(); }
+                    
+                    // Allows Multi-Line Parsing via Commas
+                    const [fromSide, toSide] = line.split('->').map(s => s.trim());
+                    const fromPins = fromSide.split(',').map(s => s.trim());
+                    const toPins = toSide.split(',').map(s => s.trim());
+                    
+                    fromPins.forEach(f => {
+                        toPins.forEach(t => {
+                            if(f.includes('.') && t.includes('.')){
+                                const [fromNode, fromPin] = f.split('.');
+                                const [toNode, toPin] = t.split('.');
+                                edges.push({ fromNode, fromPin, toNode, toPin, color });
+                            }
+                        });
+                    });
+                }
+            }); return { nodes, edges };
+        }
+
+        function getRealPin(nodeId, pinData, def) {
+            let state = customPositions[nodeId] || {}; 
+            let cx = def.width / 2; let cy = def.height / 2;
+            let dx = pinData.x - cx; let dy = pinData.y - cy;
+            if (state.flipX) dx = -dx; if (state.flipY) dy = -dy;
+            let rot = (state.rotation || 0) * (Math.PI / 180);
+            let nx = Math.round(dx * Math.cos(rot) - dy * Math.sin(rot));
+            let ny = Math.round(dx * Math.sin(rot) + dy * Math.cos(rot));
+            return { x: cx + nx, y: cy + ny };
+        }
+
+        function simplifyPath(pts) {
+            if (!pts || pts.length <= 2) return pts;
+            
+            let p1 = [pts[0]];
+            for(let i=1; i<pts.length; i++) {
+                if(Math.abs(pts[i].x - p1[p1.length-1].x) > 1 || Math.abs(pts[i].y - p1[p1.length-1].y) > 1) {
+                    p1.push(pts[i]);
+                }
+            }
+            if(p1.length <= 2) return p1;
+
+            let p2 = [p1[0]];
+            for(let i=1; i<p1.length-1; i++) {
+                let prev = p2[p2.length-1], curr = p1[i], next = p1[i+1];
+                let isH = Math.abs(prev.y - curr.y) < 2 && Math.abs(curr.y - next.y) < 2;
+                let isV = Math.abs(prev.x - curr.x) < 2 && Math.abs(curr.x - next.x) < 2;
+                if(isH || isV) continue; 
+                p2.push(curr);
+            }
+            p2.push(p1[p1.length-1]);
+            return p2;
+        }
+
+        function generateDefaultOrthogonal(x1, y1, x2, y2, isLeft1, isLeft2) {
+            let cp1x = isLeft1 ? x1 - 40 : x1 + 40; let cp2x = isLeft2 ? x2 - 40 : x2 + 40;
+            if (isLeft1 && isLeft2) return [{x:x1, y:y1}, {x:Math.min(x1, x2)-40, y:y1}, {x:Math.min(x1, x2)-40, y:y2}, {x:x2, y:y2}];
+            if (!isLeft1 && !isLeft2) return [{x:x1, y:y1}, {x:Math.max(x1, x2)+40, y:y1}, {x:Math.max(x1, x2)+40, y:y2}, {x:x2, y:y2}];
+            if (!isLeft1 && isLeft2 && x1 < x2 - 40) return [{x:x1, y:y1}, {x:(x1+x2)/2, y:y1}, {x:(x1+x2)/2, y:y2}, {x:x2, y:y2}];
+            return [{x:x1, y:y1}, {x:cp1x, y:y1}, {x:cp1x, y:(y1+y2)/2}, {x:cp2x, y:(y1+y2)/2}, {x:cp2x, y:y2}, {x:x2, y:y2}];
+        }
+
+        function render(ast) {
+            const layer = document.getElementById('zoom-layer');
+            let componentsSvg = ''; let wiresSvg = ''; let autoX = 400, autoY = 50; 
+            
+            Object.values(ast.nodes).forEach((node) => {
+                if (!customPositions[node.id]) {
+                    customPositions[node.id] = { x: autoX, y: autoY, flipX: false, flipY: false, rotation: 0 };
+                    autoY += Math.max(120, node.def.height + 40); if (autoY > 800) { autoY = 50; autoX += 300; }
+                }
+                const state = customPositions[node.id];
+
+                componentsSvg += `<g class="component-group" data-id="${node.id}" transform="translate(${state.x}, ${state.y})">`;
+                componentsSvg += `<g transform="translate(${node.def.width/2}, ${node.def.height/2}) rotate(${state.rotation||0}) scale(${state.flipX?-1:1}, ${state.flipY?-1:1}) translate(${-node.def.width/2}, ${-node.def.height/2})">`;
+                componentsSvg += typeof node.def.svg === 'function' ? node.def.svg(node.arg) : node.def.svg;
+                componentsSvg += `</g><text x="${node.def.width/2}" y="-15" class="component-label" text-anchor="middle">${node.id}</text>`;
+
+                Object.entries(node.def.pins).forEach(([pinName, data]) => {
+                    let realPin = getRealPin(node.id, data, node.def);
+                    componentsSvg += `<circle cx="${realPin.x}" cy="${realPin.y}" r="4" fill="#fbbf24" stroke="#b45309" stroke-width="1.5"/>`;
+                    let isLeft = realPin.x < node.def.width / 2;
+                    componentsSvg += `<text x="${isLeft ? realPin.x + 15 : realPin.x - 15}" y="${realPin.y + 4}" class="pin-label" text-anchor="${isLeft ? 'start' : 'end'}">${pinName}</text>`;
+                });
+                componentsSvg += `</g>`;
+            });
+
+            ast.edges.forEach(edge => {
+                const fNode = ast.nodes[edge.fromNode]; const tNode = ast.nodes[edge.toNode]; if (!fNode || !tNode) return;
+                const fPinObj = resolvePin(fNode.def, edge.fromPin); const tPinObj = resolvePin(tNode.def, edge.toPin); if (!fPinObj || !tPinObj) return;
+
+                const fReal = getRealPin(edge.fromNode, fPinObj.data, fNode.def); const tReal = getRealPin(edge.toNode, tPinObj.data, tNode.def);
+                const startX = customPositions[edge.fromNode].x + fReal.x; const startY = customPositions[edge.fromNode].y + fReal.y;
+                const endX = customPositions[edge.toNode].x + tReal.x; const endY = customPositions[edge.toNode].y + tReal.y;
+                const edgeId = `${edge.fromNode}.${edge.fromPin}-${edge.toNode}.${edge.toPin}`;
+                
+                let route = customWireRoutes[edgeId];
+
+                wiresSvg += `<g class="wire-group" data-edge="${edgeId}">`;
+
+                if (wireStyle === 'orthogonal') {
+                    if (!route || !route.points) {
+                        let fIsLeft = fReal.x < fNode.def.width / 2; let tIsLeft = tReal.x < tNode.def.width / 2;
+                        route = { points: simplifyPath(generateDefaultOrthogonal(startX, startY, endX, endY, fIsLeft, tIsLeft)) };
+                        customWireRoutes[edgeId] = route;
+                    }
+                    
+                    let pts = route.points;
+                    
+                    if (pts.length >= 2) {
+                        let isH0 = Math.abs(pts[0].y - pts[1].y) < Math.abs(pts[0].x - pts[1].x);
+                        pts[0] = {x: startX, y: startY}; if (isH0) pts[1].y = startY; else pts[1].x = startX;
+                        let last = pts.length - 1;
+                        let isHLast = Math.abs(pts[last].y - pts[last-1].y) < Math.abs(pts[last].x - pts[last-1].x);
+                        pts[last] = {x: endX, y: endY}; if (isHLast) pts[last-1].y = endY; else pts[last-1].x = endX;
+                    }
+
+                    if (dragWireId !== edgeId) {
+                        pts = simplifyPath(pts);
+                        route.points = pts;
+                    }
+
+                    let pathStr = `M ${pts[0].x} ${pts[0].y}`;
+                    for (let i = 1; i < pts.length; i++) pathStr += ` L ${pts[i].x} ${pts[i].y}`;
+
+                    let hitboxes = [];
+                    for (let i = 0; i < pts.length - 1; i++) {
+                        let p1 = pts[i], p2 = pts[i+1];
+                        let isH = Math.abs(p1.y - p2.y) < Math.abs(p1.x - p2.x);
+                        let cls = isH ? 'wire-seg-h' : 'wire-seg-v';
+                        let len = isH ? Math.abs(p1.x - p2.x) : Math.abs(p1.y - p2.y);
+                        hitboxes.push({cls, p1, p2, i, len});
+                    }
+                    hitboxes.sort((a, b) => b.len - a.len); 
+                    for (let box of hitboxes) {
+                        wiresSvg += `<line class="wire-hitbox ${box.cls}" x1="${box.p1.x}" y1="${box.p1.y}" x2="${box.p2.x}" y2="${box.p2.y}" data-edge="${edgeId}" data-seg="${box.i}"/>`;
+                    }
+                    
+                    wiresSvg += `<path class="wire-visible" d="${pathStr}" fill="none" stroke="${edge.color}" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="round"/>`;
+                } else {
+                    if (!route || route.cpX === undefined) {
+                        route = customWireRoutes[edgeId] = { cpX: (startX + endX) / 2, cpY: (startY + endY) / 2 };
+                    }
+                    let path = `M ${startX} ${startY} Q ${route.cpX} ${route.cpY} ${endX} ${endY}`;
+                    wiresSvg += `<path class="wire-hitbox wire-seg-c" d="${path}" data-edge="${edgeId}" data-curve="true"/>`;
+                    wiresSvg += `<path class="wire-visible" d="${path}" fill="none" stroke="${edge.color}" stroke-width="3.5"/>`;
+                }
+                
+                wiresSvg += `<circle cx="${startX}" cy="${startY}" r="3.5" fill="${edge.color}"/>`;
+                wiresSvg += `<circle cx="${endX}" cy="${endY}" r="3.5" fill="${edge.color}"/>`;
+                wiresSvg += `</g>`;
+            });
+
+            layer.innerHTML = componentsSvg + wiresSvg; 
+        }
+
+        // --- INTERACTION & EVENT LISTENERS ---
+        const svgCanvas = document.getElementById('canvas'); 
+        const zoomLayer = document.getElementById('zoom-layer'); 
+        const contextMenu = document.getElementById('context-menu');
+        
+        let dragId = null, dragWireId = null, dragWireSeg = null, dragWireMode = null;
+        let offsetX = 0, offsetY = 0, isPanning = false, startPanX = 0, startPanY = 0;
+        let rightClickedComp = null, rightClickedWire = null, rightClickedSeg = null, rightClickedSvgPos = null;
+
+        function getMouseSvgPos(evt) { let ctm = zoomLayer.getScreenCTM(); return { x: (evt.clientX - ctm.e) / ctm.a, y: (evt.clientY - ctm.f) / ctm.d }; }
+
+        window.addEventListener('contextmenu', (e) => {
+            const comp = e.target.closest('.component-group');
+            const wire = e.target.closest('.wire-hitbox');
+            rightClickedSvgPos = getMouseSvgPos(e);
+
+            if (comp) {
+                e.preventDefault(); rightClickedComp = comp.getAttribute('data-id'); rightClickedWire = null;
+                document.querySelectorAll('.comp-menu').forEach(el => el.style.display = 'flex');
+                document.querySelectorAll('.wire-menu').forEach(el => el.style.display = 'none');
+                contextMenu.style.display = 'block'; contextMenu.style.left = e.pageX + 'px'; contextMenu.style.top = e.pageY + 'px';
+            } else if (wire) {
+                e.preventDefault(); rightClickedWire = wire.getAttribute('data-edge'); rightClickedSeg = parseInt(wire.getAttribute('data-seg'), 10); rightClickedComp = null;
+                document.querySelectorAll('.comp-menu').forEach(el => el.style.display = 'none');
+                document.querySelectorAll('.wire-menu').forEach(el => el.style.display = 'flex');
+                contextMenu.style.display = 'block'; contextMenu.style.left = e.pageX + 'px'; contextMenu.style.top = e.pageY + 'px';
+            }
+        });
+        
+        window.addEventListener('click', () => contextMenu.style.display = 'none');
+        document.getElementById('menu-rotate').addEventListener('click', () => { if(rightClickedComp) { customPositions[rightClickedComp].rotation = ((customPositions[rightClickedComp].rotation || 0) + 90) % 360; render(currentAST); } });
+        document.getElementById('menu-flip-h').addEventListener('click', () => { if(rightClickedComp) { customPositions[rightClickedComp].flipX = !customPositions[rightClickedComp].flipX; render(currentAST); } });
+        document.getElementById('menu-flip-v').addEventListener('click', () => { if(rightClickedComp) { customPositions[rightClickedComp].flipY = !customPositions[rightClickedComp].flipY; render(currentAST); } });
+        
+        document.getElementById('menu-add-bend').addEventListener('click', () => {
+            if (!rightClickedWire) return;
+            let route = customWireRoutes[rightClickedWire];
+            if (wireStyle === 'orthogonal' && route && route.points) {
+                let pts = route.points; let mx = rightClickedSvgPos.x, my = rightClickedSvgPos.y;
+                let seg = rightClickedSeg, p1 = pts[seg], p2 = pts[seg+1];
+                let isH = Math.abs(p1.y - p2.y) < Math.abs(p1.x - p2.x);
+                if (isH) pts.splice(seg + 1, 0, {x: mx - 15, y: p1.y}, {x: mx - 15, y: p1.y + 30}, {x: mx + 15, y: p1.y + 30}, {x: mx + 15, y: p1.y});
+                else pts.splice(seg + 1, 0, {x: p1.x, y: my - 15}, {x: p1.x + 30, y: my - 15}, {x: p1.x + 30, y: my + 15}, {x: p1.x, y: my + 15});
+                route.points = simplifyPath(pts);
+                render(currentAST);
+            }
+        });
+
+        document.getElementById('menu-straighten-wire').addEventListener('click', () => {
+            if (!rightClickedWire) return;
+            delete customWireRoutes[rightClickedWire];
+            render(currentAST);
+        });
+
+        svgCanvas.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            e.preventDefault(); 
+
+            const wireHitbox = e.target.closest('.wire-hitbox');
+            if (wireHitbox) {
+                dragWireId = wireHitbox.getAttribute('data-edge');
+                
+                if (wireHitbox.getAttribute('data-curve') === "true") {
+                    dragWireMode = 'c';
+                    return;
+                }
+
+                let segIdx = parseInt(wireHitbox.getAttribute('data-seg'), 10);
+                let route = customWireRoutes[dragWireId];
+                
+                if (route && route.points && !isNaN(segIdx)) {
+                    let pts = route.points;
+                    let p1 = pts[segIdx], p2 = pts[segIdx+1];
+                    let isH = Math.abs(p1.y - p2.y) < Math.abs(p1.x - p2.x);
+                    const mx = getMouseSvgPos(e).x, my = getMouseSvgPos(e).y;
+                    
+                    if (pts.length === 2) {
+                        if (isH) { pts.splice(1, 0, {x: mx-10, y: p1.y}, {x: mx-10, y: p1.y}, {x: mx+10, y: p1.y}, {x: mx+10, y: p1.y}); dragWireSeg = 2; dragWireMode = 'y'; } 
+                        else { pts.splice(1, 0, {x: p1.x, y: my-10}, {x: p1.x, y: my-10}, {x: p1.x, y: my+10}, {x: p1.x, y: my+10}); dragWireSeg = 2; dragWireMode = 'x'; }
+                    } else if (segIdx === 0) {
+                        if (isH) { pts.splice(1, 0, {x: mx, y: p1.y}, {x: mx, y: p1.y}); dragWireSeg = 2; dragWireMode = 'y'; } 
+                        else { pts.splice(1, 0, {x: p1.x, y: my}, {x: p1.x, y: my}); dragWireSeg = 2; dragWireMode = 'x'; }
+                    } else if (segIdx === pts.length - 2) {
+                        if (isH) { pts.splice(segIdx+1, 0, {x: mx, y: p2.y}, {x: mx, y: p2.y}); dragWireSeg = segIdx; dragWireMode = 'y'; } 
+                        else { pts.splice(segIdx+1, 0, {x: p2.x, y: my}, {x: p2.x, y: my}); dragWireSeg = segIdx; dragWireMode = 'x'; }
+                    } else {
+                        dragWireSeg = segIdx; dragWireMode = isH ? 'y' : 'x';
+                    }
+                }
+                return;
+            }
+
+            const compTarget = e.target.closest('.component-group');
+            if (compTarget) {
+                dragId = compTarget.getAttribute('data-id'); const mousePos = getMouseSvgPos(e);
+                offsetX = mousePos.x - customPositions[dragId].x; offsetY = mousePos.y - customPositions[dragId].y; return;
+            }
+
+            isPanning = true; startPanX = e.clientX - panX; startPanY = e.clientY - panY;
+            document.getElementById('viewer-container').style.cursor = 'grabbing';
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isPanning) { panX = e.clientX - startPanX; panY = e.clientY - startPanY; updateTransform(); return; }
+            
+            if (!dragWireId && !dragId) return;
+            const mousePos = getMouseSvgPos(e);
+            
+            if (dragWireId && customWireRoutes[dragWireId]) {
+                let route = customWireRoutes[dragWireId];
+                if (dragWireMode === 'c') {
+                    route.cpX = mousePos.x; route.cpY = mousePos.y;
+                } else if (route.points && route.points[dragWireSeg]) {
+                    let pts = route.points;
+                    let p1 = pts[dragWireSeg], p2 = pts[dragWireSeg + 1];
+                    
+                    if (dragWireMode === 'y') { 
+                        let newY = mousePos.y;
+                        if (dragWireSeg > 0 && Math.abs(newY - pts[dragWireSeg - 1].y) < 15) newY = pts[dragWireSeg - 1].y;
+                        if (dragWireSeg < pts.length - 2 && Math.abs(newY - pts[dragWireSeg + 2].y) < 15) newY = pts[dragWireSeg + 2].y;
+                        p1.y = newY; p2.y = newY; 
+                    } else { 
+                        let newX = mousePos.x;
+                        if (dragWireSeg > 0 && Math.abs(newX - pts[dragWireSeg - 1].x) < 15) newX = pts[dragWireSeg - 1].x;
+                        if (dragWireSeg < pts.length - 2 && Math.abs(newX - pts[dragWireSeg + 2].x) < 15) newX = pts[dragWireSeg + 2].x;
+                        p1.x = newX; p2.x = newX; 
+                    }
+                }
+                render(currentAST); 
+            } else if (dragId) {
+                customPositions[dragId].x = mousePos.x - offsetX; customPositions[dragId].y = mousePos.y - offsetY;
+                render(currentAST); 
+            }
+        });
+
+        window.addEventListener('mouseup', () => { 
+            if (wireStyle === 'orthogonal' && dragWireId && customWireRoutes[dragWireId]) {
+                customWireRoutes[dragWireId].points = simplifyPath(customWireRoutes[dragWireId].points);
+                render(currentAST);
+            }
+            dragId = null; dragWireId = null; dragWireSeg = null; dragWireMode = null; isPanning = false; 
+            document.getElementById('viewer-container').style.cursor = 'grab'; 
+        });
+
+        cmEditor.on("change", () => { try { currentAST = parseScript(cmEditor.getValue()); render(currentAST); } catch(e) {} });
+
+        updateTransform(); currentAST = parseScript(cmEditor.getValue()); render(currentAST);
+    </script>
+</body>
+</html>
