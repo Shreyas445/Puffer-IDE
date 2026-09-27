@@ -64,7 +64,7 @@ Integrated prompt engineering engine that generates strict, hallucination-free p
 | **Power Management** | `Power_Supply_12V` | 12V 5A Regulated DC Power Supply (12V, GND, AC_L, AC_N) |
 | | `Solar_Panel` | 18V Monocrystalline Photovoltaic Panel (`+`, `-`) |
 | | `LM2596_Buck` | DC-DC Step-Down Regulator (IN+, IN-, OUT+, OUT-) |
-| | `L7805` | 5V 1.5A Linear Voltage Regulator (IN, GND, OUT) |
+| | `L7805CV` / `L7805` | 5V 1.5A Linear Regulator / TO-220 Package (IN, GND, OUT / Gate, Drain, Source) |
 | | `VCC` / `GND` | Power Supply Symbols / Common Ground Rail |
 | **Actuators & Relays**| `Relay_Module` | 5V/10A Optocoupled Relay (VCC, GND, IN, NO, COM, NC) |
 | | `Servo_SG90` | 9g Micro Position Servo (GND, VCC, PWM) |
@@ -79,9 +79,10 @@ Integrated prompt engineering engine that generates strict, hallucination-free p
 | | `Antenna` | Generic RF Whip/Dipole Antenna symbol |
 | **Displays** | `OLED_SSD1306` | 0.96" 128x64 I2C OLED Screen (GND, VCC, SCL, SDA) |
 | | `I2C_LCD` | 16x2 Character LCD with I2C Backpack (GND, VCC, SDA, SCL) |
-| **Sensors** | `Ultrasonic_HC_SR04`| Ultrasonic Distance Rangefinder (VCC, TRIG, ECHO, GND) |
-| | `DHT22` | Digital Temperature & Humidity Sensor (VCC, DATA, GND) |
+| **Sensors** | `Load_Cell` / `LoadCell` | 4-Wire Strain Gauge Load Cell (**RED**, **BLACK**, **GREEN**, **WHITE**) |
 | | `HX711` | 24-Bit ADC Load Cell Weighing Module (E+, E-, A+, A-, B+, B-, DT, SCK) |
+| | `Ultrasonic_HC_SR04`| Ultrasonic Distance Rangefinder (VCC, TRIG, ECHO, GND) |
+| | `DHT22` | Digital Temperature & Humidity Sensor (VCC, DATA, GND) |
 | | `Photo_Diode` | Light Sensitive Photodiode (+, -) |
 | **Passives & Semis** | `Resistor` | Parametric Color-Banded Resistor (e.g. `Resistor(10k)`) |
 | | `LED` | Light Emitting Diode (+, -) |
@@ -135,6 +136,15 @@ mcu.GND_1, relay.GND -> psu.GND : black
 - **`orange`**: Chip Select / Control lines (CS, CSN, SS, CE, EN, RST)
 - **`green`**: Analog Signals, Data, Sensors (TRIG, ECHO, DATA, WIPER)
 - **`purple`**: UART Serial (TX, RX)
+
+### 4. Load Cell & HX711 Instrumentation Wiring
+`Load_Cell` (or `LoadCell`) has 4 color-coded wire leads: **RED**, **BLACK**, **GREEN**, and **WHITE**:
+```puffer
+load.RED -> hx.E+ : red      // Excitation Power (+)
+load.BLACK -> hx.E- : black  // Excitation Ground (-)
+load.GREEN -> hx.A+ : green  // Analog Output (+)
+load.WHITE -> hx.A- : white  // Analog Output (-)
+```
 
 ---
 

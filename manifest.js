@@ -19,6 +19,8 @@ import { Power_Supply_12V } from './libraries/power_supply_12v.js';
 import { Solar_Panel } from './libraries/solar_panel.js';
 import { LoRa_SX1278 } from './libraries/lora_sx1278.js';
 import { OLED_SSD1306, Ultrasonic_HC_SR04, Servo_SG90, DHT22, Potentiometer, Push_Button } from './libraries/more_components.js';
+import { Load_Cell, LoadCell } from './libraries/load_cell.js';
+import { L7805CV } from './libraries/l7805cv.js';
 
 // --- Basic Passives Logic ---
 function getResistorColors(valStr) {
@@ -76,6 +78,9 @@ Solar_Panel.description = '18V Photovoltaic Solar Panel';
 LM2596_Buck.category = 'Power';
 LM2596_Buck.description = 'DC-DC Step-Down Buck Converter';
 
+L7805CV.category = 'Power';
+L7805CV.description = '5V 1.5A Voltage Regulator / Transistor (TO-220)';
+
 LoRa_SX1278.category = 'Wireless';
 LoRa_SX1278.description = 'Ra-02 433MHz Long Range Transceiver';
 
@@ -93,6 +98,9 @@ Ultrasonic_HC_SR04.description = 'Ultrasonic Distance Sensor (2-400cm)';
 
 DHT22.category = 'Sensors';
 DHT22.description = 'Digital Temperature & Humidity Sensor';
+
+Load_Cell.category = 'Sensors';
+Load_Cell.description = '4-Wire Strain Gauge Load Cell (RED, BLACK, GREEN, WHITE)';
 
 Servo_SG90.category = 'Actuators';
 Servo_SG90.description = '9g Micro Position Servo Motor';
@@ -177,6 +185,7 @@ export const ComponentRegistry = {
     Power_Supply_12V,
     Solar_Panel,
     LM2596_Buck,
+    L7805CV,
     
     // Relays & Actuators
     Relay_Module,
@@ -197,6 +206,8 @@ export const ComponentRegistry = {
     Ultrasonic_HC_SR04,
     DHT22,
     HX711,
+    Load_Cell,
+    LoadCell,
     
     // Passives & Storage
     Potentiometer,

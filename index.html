@@ -524,6 +524,7 @@
                 <i class="fa-solid fa-bolt-lightning"></i>
                 <select id="preset-selector" class="preset-dropdown" title="Load Schematic Example">
                     <option value="" disabled selected>Load Circuit Preset...</option>
+                    <option value="preset_scale">Digital Scale (Load Cell + HX711 + Uno + LCD + L7805CV)</option>
                     <option value="preset_greenhouse">IoT Smart Greenhouse (ESP32 + Relay + Solar + DHT22 + OLED)</option>
                     <option value="preset_lora">LoRa Telemetry Field Node (STM32 + LoRa + MicroSD + LCD)</option>
                     <option value="preset_automation">12V Power & Motor Automation (Uno + 12V PSU + Relay + Fan + Pot)</option>
@@ -784,6 +785,43 @@ mcu.GPIO23 -> relay.IN : yellow
 
         // --- PRESET CIRCUITS ---
         const PRESETS = {
+            preset_scale: `// ==========================================
+// DEFINING COMPONENTS
+// ==========================================
+uno = Arduino_Uno
+psu = Power_Supply_12V
+reg = L7805CV
+load = Load_Cell
+hx = HX711
+lcd = I2C_LCD
+gnd = GND
+
+// ==========================================
+// 12V TO 5V REGULATION (L7805CV)
+// ==========================================
+psu.12V -> reg.IN : red
+gnd.GND -> psu.GND, reg.GND, uno.GND_2, hx.GND, lcd.GND : black
+reg.OUT -> uno.5V, hx.VCC, lcd.VCC : red
+
+// ==========================================
+// 4-WIRE LOAD CELL TO HX711 (RED, BLACK, GREEN, WHITE)
+// ==========================================
+load.RED -> hx.E+ : red
+load.BLACK -> hx.E- : black
+load.GREEN -> hx.A+ : green
+load.WHITE -> hx.A- : white
+
+// ==========================================
+// HX711 TO ARDUINO DIGITAL INTERFACE
+// ==========================================
+hx.DT -> uno.D3 : green
+hx.SCK -> uno.D2 : yellow
+
+// ==========================================
+// I2C 16x2 LCD DISPLAY
+// ==========================================
+uno.A5, uno.A4 -> lcd.SCL, lcd.SDA : yellow
+`,
             preset_greenhouse: `// ==========================================
 // DEFINING COMPONENTS
 // ==========================================
@@ -1151,10 +1189,22 @@ ${categorizedDocs}
 === CRITICAL DESIGN RULES ===
 1. ALWAYS provide power (VCC/GND or 12V/GND) to microcontrollers, sensors, displays, and relay modules.
 2. For high-power DC loads (e.g. 12V fans, pumps, heaters), connect 12V PSU to Relay COM, Relay NO to Load (+), and Load (-) back to PSU GND.
-3. Use dot notation strictly: alias.pin -> alias.pin.
-4. Output ONLY the raw Puffer schematic code inside a single code block. No conversational markdown, explanations, or chatter.
+3. 4-WIRE STRAIN GAUGE LOAD CELL WIRING:
+   'Load_Cell' (or 'LoadCell') uses 4 standard color-coded wire leads: RED, BLACK, GREEN, WHITE.
+   When wiring to the HX711 24-bit ADC amplifier, strictly connect:
+   - load.RED -> hx.E+ : red      (Excitation +)
+   - load.BLACK -> hx.E- : black  (Excitation -)
+   - load.GREEN -> hx.A+ : green  (Signal A+)
+   - load.WHITE -> hx.A- : white  (Signal A-)
+4. L7805CV LINEAR REGULATION / TO-220 PACKAGE:
+   - Pin 'IN' connects to high voltage (e.g. 12V)
+   - Pin 'GND' connects to ground
+   - Pin 'OUT' outputs regulated 5V
+   (Also supports 'Gate', 'Drain', 'Source' aliases).
+5. Use dot notation strictly: alias.pin -> alias.pin.
+6. Output ONLY the raw Puffer schematic code inside a single code block. No conversational markdown, explanations, or chatter.
 
-=== FEW-SHOT EXAMPLE: Smart Solar IoT Station with Relay & Sensor ===
+=== FEW-SHOT EXAMPLE 1: Smart Solar IoT Station with Relay & Sensor ===
 // DEFINING COMPONENTS
 mcu = ESP32_devkit_v1
 solar = Solar_Panel
@@ -1185,6 +1235,35 @@ mcu.GPIO21 -> oled.SDA : yellow
 // --- Sensor & Relay Control ---
 mcu.GPIO4 -> dht.DATA : green
 mcu.GPIO23 -> relay.IN : yellow
+
+=== FEW-SHOT EXAMPLE 2: Precision Digital Weighing Scale (Load Cell + HX711 + L7805CV) ===
+// DEFINING COMPONENTS
+uno = Arduino_Uno
+psu = Power_Supply_12V
+reg = L7805CV
+load = Load_Cell
+hx = HX711
+lcd = I2C_LCD
+gnd = GND
+
+// WIRING PINS
+// --- 12V to 5V Linear Regulation via L7805CV ---
+psu.12V -> reg.IN : red
+gnd.GND -> psu.GND, reg.GND, uno.GND_2, hx.GND, lcd.GND : black
+reg.OUT -> uno.5V, hx.VCC, lcd.VCC : red
+
+// --- 4-Wire Strain Gauge Load Cell to HX711 ADC ---
+load.RED -> hx.E+ : red
+load.BLACK -> hx.E- : black
+load.GREEN -> hx.A+ : green
+load.WHITE -> hx.A- : white
+
+// --- HX711 to Arduino Digital Pins ---
+hx.DT -> uno.D3 : green
+hx.SCK -> uno.D2 : yellow
+
+// --- I2C LCD Display ---
+uno.A5, uno.A4 -> lcd.SCL, lcd.SDA : yellow
 `;
 
             if (customUserRequirement && customUserRequirement.trim()) {
