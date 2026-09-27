@@ -3,113 +3,251 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Puffer | EDA Schematic Editor</title>
+    <title>Puffer | EDA Schematic Studio</title>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/theme/darcula.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        body { margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; display: flex; height: 100vh; width: 100vw; overflow: hidden; background: #0d1117; }
-        
-        #editor-container { width: 450px; min-width: 450px; height: 100vh; display: flex; flex-direction: column; background-color: #1e1e1e; border-right: 2px solid #000; z-index: 100; }
-        .top-bar { height: 50px; min-height: 50px; background: #007acc; color: white; display: flex; align-items: center; padding: 0 15px; font-size: 16px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.5); z-index: 10; gap: 10px; }
-
-        .CodeMirror { flex-grow: 1; height: auto; font-family: 'Consolas', monospace; font-size: 15px; padding-top: 10px; }
-        .cm-s-darcula span.cm-puffer-arrow { color: #c586c0; font-weight: bold; }
-        .cm-s-darcula span.cm-puffer-component { color: #4ec9b0; font-weight: bold; }
-        .cm-s-darcula span.cm-puffer-pin { color: #9cdcfe; }
-        .cm-s-darcula span.cm-puffer-color { color: #ce9178; }
-
-        /* --- DIAGRAM CANVAS --- */
-        #viewer-container { 
-            flex: 1; height: 100vh; position: relative; overflow: hidden; 
-            background-image: radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px); 
-            background-position: 100px 50px; 
-            cursor: grab;
-            user-select: none; -webkit-user-select: none;
+        /* --- CSS VARIABLES FOR THEME SWITCHING --- */
+        :root {
+            /* DARK MODE (Default) */
+            --bg-base: #090d16;
+            --sidebar-bg: #161b22;
+            --sidebar-border: #30363d;
+            --topbar-bg: #0d1117;
+            --editor-bg: #1e1e1e;
+            --accent: #38bdf8;
+            --accent-hover: #0284c7;
+            --text-main: #f0f6fc;
+            --text-muted: #8b949e;
+            --card-bg: #21262d;
+            --card-border: #30363d;
+            --grid-color: rgba(255,255,255,0.12);
+            --input-bg: #0d1117;
+            --menu-bg: rgba(37, 37, 38, 0.95);
+            --menu-border: #454545;
+            --menu-text: #d4d4d4;
         }
+
+        body.light-mode {
+            /* LIGHT MODE */
+            --bg-base: #f8fafc;
+            --sidebar-bg: #ffffff;
+            --sidebar-border: #cbd5e1;
+            --topbar-bg: #ffffff;
+            --editor-bg: #ffffff;
+            --accent: #0ea5e9;
+            --accent-hover: #0284c7;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --card-bg: #f1f5f9;
+            --card-border: #cbd5e1;
+            --grid-color: rgba(0,0,0,0.1);
+            --input-bg: #ffffff;
+            --menu-bg: rgba(255, 255, 255, 0.95);
+            --menu-border: #cbd5e1;
+            --menu-text: #333333;
+        }
+
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; font-family: 'Segoe UI', system-ui, sans-serif; display: flex; height: 100vh; width: 100vw; overflow: hidden; background: var(--bg-base); color: var(--text-main); transition: background 0.3s ease; }
+        
+        #editor-container { width: 500px; min-width: 500px; height: 100vh; display: flex; flex-direction: column; background-color: var(--sidebar-bg); border-right: 1px solid var(--sidebar-border); z-index: 100; position: relative; box-shadow: 4px 0 20px rgba(0,0,0,0.1); transition: background 0.3s ease, border-color 0.3s ease; }
+
+        .top-bar { height: 56px; min-height: 56px; background: var(--topbar-bg); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; border-bottom: 1px solid var(--sidebar-border); transition: background 0.3s ease; }
+        .brand-title { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; color: var(--text-main); letter-spacing: 0.5px; }
+        .brand-title i { color: var(--accent); font-size: 20px; }
+        .top-bar-actions { display: flex; align-items: center; gap: 8px; }
+
+        .btn-ui { background: var(--card-bg); border: 1px solid var(--sidebar-border); color: var(--text-main); font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease; }
+        .btn-ui:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-ui.active { background: var(--accent); border-color: var(--accent-hover); color: #fff; }
+        .btn-ui.success { background: #10b981; border-color: #047857; color: #fff; }
+
+        .CodeMirror { flex-grow: 1; height: auto; font-family: 'Consolas', monospace; font-size: 14px; padding-top: 8px; line-height: 1.6; }
+        
+        /* Syntax Highlighter Tokens - Dark Mode */
+        .cm-s-darcula span.cm-puffer-arrow { color: #f472b6; font-weight: bold; }
+        .cm-s-darcula span.cm-puffer-component { color: #4ade80; font-weight: 600; }
+        .cm-s-darcula span.cm-puffer-pin { color: #38bdf8; }
+        .cm-s-darcula span.cm-puffer-color { color: #fbbf24; }
+        .cm-s-darcula span.cm-comment { color: #6e7681; font-style: italic; }
+
+        /* Syntax Highlighter Tokens - Light Mode */
+        .cm-s-default span.cm-puffer-arrow { color: #db2777; font-weight: bold; }
+        .cm-s-default span.cm-puffer-component { color: #16a34a; font-weight: 600; }
+        .cm-s-default span.cm-puffer-pin { color: #0284c7; }
+        .cm-s-default span.cm-puffer-color { color: #d97706; }
+        .cm-s-default span.cm-comment { color: #64748b; font-style: italic; }
+
+        .status-bar { height: 28px; background: var(--topbar-bg); border-top: 1px solid var(--sidebar-border); display: flex; align-items: center; justify-content: space-between; padding: 0 14px; font-size: 11px; color: var(--text-muted); font-family: monospace; transition: background 0.3s ease; }
+
+        #library-drawer { position: absolute; top: 56px; left: 0; width: 100%; bottom: 28px; background: var(--sidebar-bg); z-index: 150; border-right: 1px solid var(--sidebar-border); display: flex; flex-direction: column; padding: 16px; transform: translateX(-100%); transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background 0.3s ease; box-shadow: 10px 0 25px rgba(0,0,0,0.1); }
+        #library-drawer.open { transform: translateX(0); }
+        .drawer-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .drawer-title { font-size: 15px; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .search-box { position: relative; margin-bottom: 14px; }
+        .search-box input { width: 100%; background: var(--input-bg); border: 1px solid var(--sidebar-border); border-radius: 6px; padding: 8px 12px 8px 34px; color: var(--text-main); font-size: 13px; outline: none; transition: background 0.3s ease; }
+        .search-box input:focus { border-color: var(--accent); }
+        .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); font-size: 13px; }
+        .library-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 4px; }
+        .library-list::-webkit-scrollbar { width: 6px; }
+        .library-list::-webkit-scrollbar-thumb { background: var(--sidebar-border); border-radius: 3px; }
+        .component-card { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 8px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; cursor: pointer; transition: all 0.15s ease; }
+        .component-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+        .comp-info { display: flex; flex-direction: column; gap: 3px; }
+        .comp-name { font-size: 13px; font-weight: 600; color: var(--text-main); font-family: monospace; }
+        .comp-tag { font-size: 11px; color: var(--text-muted); }
+        .comp-insert-badge { font-size: 11px; background: rgba(56, 189, 248, 0.15); color: var(--accent); padding: 4px 8px; border-radius: 4px; font-weight: 600; border: 1px solid rgba(56, 189, 248, 0.3); }
+
+        #viewer-container { flex: 1; height: 100vh; position: relative; overflow: hidden; background-image: radial-gradient(var(--grid-color) 1px, transparent 1px); background-position: 100px 50px; cursor: grab; user-select: none; -webkit-user-select: none; transition: background-image 0.3s ease; }
         #viewer-container:active { cursor: grabbing; }
         svg { display: block; width: 100%; height: 100%; pointer-events: auto; }
         
-        .component-group { cursor: pointer; transition: filter 0.2s; }
-        .component-group:hover { filter: drop-shadow(0 0 8px rgba(88, 166, 255, 0.6)); }
+        .component-group { cursor: pointer; transition: filter 0.15s; }
+        .component-group:hover { filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.7)); }
         
-        /* Wire interactions */
         .wire-group { cursor: pointer; }
         .wire-hitbox { fill: none; stroke: transparent; stroke-width: 25px; stroke-linecap: butt; }
+        .wire-seg-v { cursor: col-resize; } .wire-seg-h { cursor: row-resize; } .wire-seg-c { cursor: move; }       
         
-        /* Dynamic Cursors */
-        .wire-seg-v { cursor: col-resize; } 
-        .wire-seg-h { cursor: row-resize; } 
-        .wire-seg-c { cursor: move; }       
-        
-        .wire-visible { pointer-events: none; transition: filter 0.1s, stroke-width 0.1s; }
-        .wire-group:hover .wire-visible { filter: drop-shadow(0 0 6px rgba(255,255,255,0.8)); stroke-width: 4.5px; }
+        .wire-visible { pointer-events: none; transition: stroke-width 0.1s; }
+        .wire-group:hover .wire-visible { filter: drop-shadow(0 0 6px rgba(56,189,248,0.9)); stroke-width: 4.5px; }
 
-        .pin-label { font-family: 'Consolas', monospace; font-size: 11px; fill: #e2e8f0; font-weight: bold; pointer-events: none; }
-        .component-label { font-family: sans-serif; font-size: 16px; font-weight: bold; fill: #fff; pointer-events: none; }
+        /* Dynamic SVG text colors based on theme */
+        .pin-label { font-family: 'Consolas', monospace; font-size: 11px; fill: var(--text-muted); font-weight: bold; pointer-events: none; transition: fill 0.3s ease; }
+        .component-label { font-family: sans-serif; font-size: 16px; font-weight: bold; fill: var(--text-main); pointer-events: none; transition: fill 0.3s ease; }
         .value-label { font-family: 'Consolas', monospace; font-size: 14px; fill: #fbbf24; font-weight: bold; pointer-events: none; }
 
-        /* Floating UI */
-        #top-right-controls { position: absolute; top: 20px; right: 30px; z-index: 10; display: flex; gap: 10px; }
-        .icon-btn { background: #21262d; border: 1px solid #30363d; color: #c9d1d9; font-size: 18px; width: 44px; height: 44px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; }
-        .icon-btn:hover { background: #30363d; color: #fff; }
+        #top-right-controls { position: absolute; top: 18px; right: 24px; z-index: 10; display: flex; gap: 8px; }
+        .icon-btn { background: var(--card-bg); border: 1px solid var(--sidebar-border); color: var(--text-main); font-size: 15px; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.2s; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .icon-btn:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
 
-        #zoom-controls { position: absolute; bottom: 30px; right: 30px; background: #21262d; border: 1px solid #30363d; border-radius: 8px; display: flex; z-index: 10; }
-        .zoom-btn { background: none; border: none; color: #c9d1d9; font-size: 20px; font-weight: bold; padding: 10px 15px; cursor: pointer; border-right: 1px solid #30363d; transition: background 0.2s; }
-        .zoom-btn:last-child { border-right: none; font-size: 14px; }
-        .zoom-btn:hover { background: #30363d; color: #fff; }
+        #zoom-controls { position: absolute; bottom: 24px; right: 24px; background: var(--card-bg); border: 1px solid var(--sidebar-border); border-radius: 8px; display: flex; z-index: 10; box-shadow: 0 4px 14px rgba(0,0,0,0.1); overflow: hidden; transition: background 0.3s ease; }
+        .zoom-btn { background: none; border: none; color: var(--text-main); font-size: 16px; font-weight: bold; padding: 10px 14px; cursor: pointer; border-right: 1px solid var(--sidebar-border); transition: background 0.2s; }
+        .zoom-btn:last-child { border-right: none; font-size: 13px; }
+        .zoom-btn:hover { background: var(--accent); color: #fff; }
 
-        /* Context Menu */
-        #context-menu { position: absolute; display: none; background: #252526; border: 1px solid #454545; box-shadow: 2px 2px 10px rgba(0,0,0,0.5); border-radius: 6px; z-index: 1000; padding: 5px 0; color: #d4d4d4; font-size: 14px; min-width: 190px; }
-        .menu-item { padding: 10px 15px; cursor: pointer; display: flex; gap: 12px; align-items: center; }
-        .menu-item:hover { background: #007acc; color: white; }
+        #context-menu { position: absolute; display: none; background: var(--menu-bg); border: 1px solid var(--menu-border); box-shadow: 0 8px 24px rgba(0,0,0,0.2); border-radius: 8px; z-index: 1000; padding: 6px 0; color: var(--menu-text); font-size: 13px; min-width: 190px; backdrop-filter: blur(8px); }
+        .menu-item { padding: 8px 16px; cursor: pointer; display: flex; gap: 12px; align-items: center; transition: background 0.15s; }
+        .menu-item:hover { background: var(--accent); color: white; }
     </style>
 </head>
 <body>
 
     <div id="editor-container">
-        <div class="top-bar"><i class="fa-solid fa-microchip"></i> Puffer EDA Editor</div>
+        <div class="top-bar">
+            <div class="brand-title">
+                <i class="fa-solid fa-microchip"></i> Puffer EDA
+            </div>
+            <div class="top-bar-actions">
+                <button class="btn-ui" id="btn-toggle-theme" title="Toggle Light/Dark Mode">
+                    <i id="theme-icon" class="fa-solid fa-sun"></i>
+                </button>
+                <button class="btn-ui" id="btn-copy-prompt" title="Generate an AI prompt with the coding rules">
+                    <i class="fa-solid fa-robot"></i> Copy Prompt
+                </button>
+                <button class="btn-ui" id="btn-toggle-library" title="Browse available component libraries">
+                    <i class="fa-solid fa-boxes-stacked"></i> Components
+                </button>
+            </div>
+        </div>
+
         <textarea id="code">
-// 1. Define Components
-uno = SIM800L
-lcd = I2C_LCD
+// ==========================================
+// DEFINING COMPONENTS
+// ==========================================
+mcu = STM32_Bluepill
+nrf = NRF24L01
 sd = Micro_SD
+lcd = I2C_LCD
+sim = SIM800L
+pd = Photo_Diode
+buz = Buzzer
+led = LED
+
+// Power Components
 buck = LM2596_Buck
-vcc = VCC
+pwr = VCC
 gnd = GND
 
-// 2. Wiring
-// Use commas to join multiple lines to a single pin!
-// Right Click components to Rotate 90° or Flip!
+// ==========================================
+// WIRING PINS
+// ==========================================
 
-uno.5V -> buck.IN+ : red
-uno.GND_1 -> buck.IN- : #10b981
+// --- NRF24L01 (Hardware SPI1 & Control) ---
+mcu.PA0 -> nrf.CE : orange
+mcu.PA1 -> nrf.CSN : yellow
+mcu.PA5, mcu.PA6, mcu.PA7 -> nrf.SCK, nrf.MISO, nrf.MOSI : green
 
-buck.OUT+ -> lcd.VCC, sd.VCC, vcc.OUT : red
-buck.OUT- -> lcd.GND, sd.GND, gnd.IN : #10b981
+// --- Micro SD Card (Software SPI) ---
+mcu.PB12 -> sd.CS : orange
+mcu.PB13, mcu.PB14, mcu.PB15 -> sd.SCK, sd.MISO, sd.MOSI : blue
 
-uno.A4 -> lcd.SDA : #38bdf8
-uno.A5 -> lcd.SCL : #f59e0b
+// --- I2C LCD ---
+mcu.PB6, mcu.PB7 -> lcd.SCL, lcd.SDA : yellow
 
-uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
+// --- SIM800L (Hardware USART1) ---
+mcu.PA9 -> sim.RX : purple
+mcu.PA10 -> sim.TX : white
+
+// --- Sensors & Actuators ---
+pd.OUT -> mcu.PA2 : green
+mcu.PB8 -> buz.POS : red
+mcu.PC13 -> led.POS : yellow
+
+// --- Power Management ---
+pwr.VCC, gnd.GND -> buck.IN+, buck.IN- : red, black
+buck.OUT+, buck.OUT- -> sim.VCC, sim.GND : red, black
+
+// Common Rails
+pwr.VCC -> mcu.3V3, nrf.VCC, sd.VCC, lcd.VCC, pd.VCC : red
+gnd.GND -> mcu.GND, nrf.GND, sd.GND, lcd.GND, pd.GND, buz.NEG, led.NEG : black
         </textarea>
+
+        <div class="status-bar">
+            <span id="status-counts">Components: 0 | Wires: 0</span>
+            <span id="status-zoom">Zoom: 100%</span>
+        </div>
+
+        <div id="library-drawer">
+            <div class="drawer-header">
+                <div class="drawer-title">
+                    <i class="fa-solid fa-book-bookmark" style="color: var(--accent);"></i> Available Components
+                </div>
+                <button class="btn-ui" id="btn-close-library" style="padding: 4px 8px;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="lib-search-input" placeholder="Search components..." spellcheck="false">
+            </div>
+            <div class="library-list" id="library-list"></div>
+        </div>
     </div>
 
     <div id="viewer-container">
         <div id="top-right-controls">
-            <button class="icon-btn" onclick="toggleWireStyle()" title="Toggle Wire Style"><i id="wire-style-icon" class="fa-solid fa-route"></i></button>
+            <button class="icon-btn" onclick="toggleWireStyle()" title="Toggle Wire Style (Orthogonal / Curve)">
+                <i id="wire-style-icon" class="fa-solid fa-route"></i>
+            </button>
+            <button class="icon-btn" onclick="exportSVG()" title="Export Schematic as SVG file">
+                <i class="fa-solid fa-file-arrow-down"></i>
+            </button>
         </div>
+
         <div id="zoom-controls">
-            <button class="zoom-btn" onclick="zoom(0.2)"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
-            <button class="zoom-btn" onclick="zoom(-0.2)"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
-            <button class="zoom-btn" onclick="resetZoom()">Reset</button>
+            <button class="zoom-btn" onclick="zoom(0.2)" title="Zoom In"><i class="fa-solid fa-plus"></i></button>
+            <button class="zoom-btn" onclick="zoom(-0.2)" title="Zoom Out"><i class="fa-solid fa-minus"></i></button>
+            <button class="zoom-btn" onclick="resetZoom()" title="Reset Camera">Reset</button>
         </div>
+
         <svg id="canvas"><g id="zoom-layer" transform="translate(100,50) scale(1)"></g></svg>
     </div>
 
-    <!-- Right-Click Context Menu -->
     <div id="context-menu">
         <div class="menu-item comp-menu" id="menu-rotate"><i class="fa-solid fa-rotate-right"></i> Rotate 90°</div>
         <div class="menu-item comp-menu" id="menu-flip-h"><i class="fa-solid fa-left-right"></i> Flip Horizontally</div>
@@ -122,64 +260,136 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.13/addon/mode/simple.min.js"></script>
 
     <script type="module">
-        import { ESP32_devkit_v1 } from './libraries/esp32_devkit_v1.js';
-        import { STM32_Bluepill } from './libraries/stm32_bluepill.js';
-        import { CoreComponents } from './libraries/core_components.js';
-        
-        import { Arduino_Uno } from './libraries/arduino_uno.js';
-        import { LM2596_Buck } from './libraries/lm2596.js';
-        import { HX711 } from './libraries/hx711.js';
-        import { I2C_LCD } from './libraries/i2c_lcd.js';
-        import { SIM800L } from './libraries/sim800l.js';
-        import { Micro_SD } from './libraries/micro_sd.js';
+        import { ComponentRegistry } from './manifest.js';
 
-        CodeMirror.defineSimpleMode("puffer", {
-            start: [
-                {regex: /\/\/.*/, token: "comment"}, {regex: /->/, token: "puffer-arrow"},
-                {regex: /:\s*(#[0-9a-fA-F]{3,6}|[a-zA-Z]+)/, token: "puffer-color"},
-                {regex: /\b(ESP32_devkit_v1|STM32_Bluepill|Resistor|LED|GND|VCC|Capacitor|NPN_Transistor|N_MOSFET|Antenna|Arduino_Uno|LM2596_Buck|HX711|I2C_LCD|SIM800L|Micro_SD)\b/, token: "puffer-component"},
-                {regex: /[a-zA-Z_0-9]+\.[a-zA-Z_0-9\+\-]+/, token: "puffer-pin"}
-            ]
+        // --- THEME TOGGLE LOGIC ---
+        let isDarkMode = true;
+        const btnToggleTheme = document.getElementById('btn-toggle-theme');
+        const themeIcon = document.getElementById('theme-icon');
+
+        btnToggleTheme.addEventListener('click', () => {
+            isDarkMode = !isDarkMode;
+            document.body.classList.toggle('light-mode', !isDarkMode);
+            themeIcon.className = isDarkMode ? "fa-solid fa-sun" : "fa-solid fa-moon";
+            
+            // Switch CodeMirror Theme
+            cmEditor.setOption("theme", isDarkMode ? "darcula" : "default");
         });
 
-        const cmEditor = CodeMirror.fromTextArea(document.getElementById("code"), { lineNumbers: true, theme: "darcula", mode: "puffer", indentUnit: 4, viewportMargin: Infinity });
+        // Initialize CodeMirror instance first
+        const cmEditor = CodeMirror.fromTextArea(document.getElementById("code"), { 
+            lineNumbers: true, theme: "darcula", mode: "puffer", indentUnit: 4, viewportMargin: Infinity 
+        });
 
-        function getResistorColors(valStr) {
-            let val = parseFloat(valStr.replace(/[kKmMΩ]/g, ''));
-            if (isNaN(val)) return ['#dc2626', '#dc2626', '#78350f']; 
-            if (valStr.toLowerCase().includes('k')) val *= 1000; if (valStr.toLowerCase().includes('m')) val *= 1000000;
-            const cMap = ['#000', '#78350f', '#dc2626', '#f97316', '#eab308', '#22c55e', '#3b82f6', '#8b5cf6', '#6b7280', '#fff'];
-            let exp = Math.floor(Math.log10(val)) - 1; let sig = Math.round(val / Math.pow(10, exp)); if (val < 10) { sig = val * 10; exp = -1; } 
-            return [cMap[Math.floor(sig/10)]||cMap[0], cMap[sig%10]||cMap[0], (exp>=0&&exp<=9)?cMap[exp]:'#ca8a04'];
+        const compNames = Object.keys(ComponentRegistry);
+        CodeMirror.defineSimpleMode("puffer", {
+            start: [
+                { regex: /\/\/.*/, token: "comment" },
+                { regex: /->/, token: "puffer-arrow" },
+                { regex: /:\s*(#[0-9a-fA-F]{3,6}|[a-zA-Z]+)/, token: "puffer-color" },
+                { regex: new RegExp(`\\b(${compNames.join('|')})\\b`, 'i'), token: "puffer-component" },
+                { regex: /[a-zA-Z_0-9]+\.[a-zA-Z_0-9\+\-]+/, token: "puffer-pin" }
+            ]
+        });
+        cmEditor.setOption("mode", "puffer");
+
+        function findComponentDef(queryType) {
+            if (!queryType) return null;
+            const normalized = queryType.trim().toLowerCase();
+            for (const [key, def] of Object.entries(ComponentRegistry)) {
+                if (key.toLowerCase() === normalized) return { officialName: key, def };
+            }
+            return null;
         }
 
-        const BasicLibrary = {
-            LED: {
-                width: 60, height: 40,
-                svg: `<line x1="0" y1="20" x2="15" y2="20" stroke="#94a3b8" stroke-width="2.5"/><line x1="35" y1="20" x2="60" y2="20" stroke="#94a3b8" stroke-width="2.5"/><path d="M 15 10 L 15 30 L 35 20 Z" fill="#ef4444" stroke="#b91c1c" stroke-width="2"/><line x1="35" y1="10" x2="35" y2="30" stroke="#b91c1c" stroke-width="3"/><text x="5" y="38" class="value-label" font-size="16">+</text><text x="45" y="38" class="value-label" font-size="16">-</text>`,
-                pins: { "+": { x: 0, y: 20 }, "-": { x: 60, y: 20 } }
-            },
-            Resistor: {
-                width: 100, height: 45,
-                svg: (arg) => {
-                    let valStr = arg ? arg : "220"; let bands = getResistorColors(valStr);
-                    return `<line x1="0" y1="15" x2="25" y2="15" stroke="#94a3b8" stroke-width="3"/><line x1="75" y1="15" x2="100" y2="15" stroke="#94a3b8" stroke-width="3"/><rect x="20" y="5" width="60" height="20" rx="2" fill="#eab308" stroke="#a16207" stroke-width="1.5"/><rect x="30" y="5" width="5" height="20" fill="${bands[0]}"/><rect x="42" y="5" width="5" height="20" fill="${bands[1]}"/><rect x="54" y="5" width="5" height="20" fill="${bands[2]}"/><rect x="68" y="5" width="3" height="20" fill="#ca8a04"/><text x="50" y="42" class="value-label" text-anchor="middle">${valStr}Ω</text>`;
-                },
-                pins: { "IN": { x: 0, y: 15 }, "OUT": { x: 100, y: 15 } }
-            }
-        };
+        const btnCopyPrompt = document.getElementById('btn-copy-prompt');
+        btnCopyPrompt.addEventListener('click', () => {
+            const compDocs = Object.entries(ComponentRegistry).map(([name, def]) => {
+                const pins = Object.keys(def.pins || {}).join(', ');
+                return `- ${name} (Available Pins: ${pins})`;
+            }).join('\n');
 
-        const Library = { 
-            ESP32_devkit_v1, STM32_Bluepill, 
-            Arduino_Uno, LM2596_Buck, HX711, I2C_LCD, SIM800L, Micro_SD,
-            ...CoreComponents, ...BasicLibrary 
-        };
-        
+            const promptText = `I am using Puffer EDA, a text-based schematic editor. Generate code following these STRICT rules:
+
+1. DEFINING COMPONENTS: Use 'alias = Component_Name'. 
+Available components and their exact pins:
+${compDocs}
+
+*DO NOT hallucinate or invent pins. Only use the exact pins listed above for each component.*
+
+2. WIRING: Use 'alias1.pin -> alias2.pin : color'. Use dot notation.
+- Single wire: 'uno.5V -> buck.IN_PLUS : red'
+- Multi-wire parallel bus: 'uno.D13, uno.D12 -> sd.SCK, sd.MISO : blue, green'
+- N-to-1 junction: 'uno.GND_1, lcd.GND -> buck.IN_MINUS : black'
+- 1-to-N junction: 'buck.OUT_PLUS -> lcd.VCC, sd.VCC : red'
+
+Please generate the Puffer schematic code for the following circuit description... ONLY output the code block.`;
+
+            navigator.clipboard.writeText(promptText).then(() => {
+                const originalHtml = btnCopyPrompt.innerHTML;
+                btnCopyPrompt.classList.add('success');
+                btnCopyPrompt.innerHTML = '<i class="fa-solid fa-check"></i> Copied!';
+                setTimeout(() => {
+                    btnCopyPrompt.classList.remove('success');
+                    btnCopyPrompt.innerHTML = originalHtml;
+                }, 2000);
+            });
+        });
+
+        const drawer = document.getElementById('library-drawer');
+        const btnToggleLib = document.getElementById('btn-toggle-library');
+        const btnCloseLib = document.getElementById('btn-close-library');
+        const libListContainer = document.getElementById('library-list');
+        const libSearchInput = document.getElementById('lib-search-input');
+
+        function toggleDrawer(open) {
+            drawer.classList.toggle('open', open);
+            btnToggleLib.classList.toggle('active', open);
+            if (open) libSearchInput.focus();
+        }
+
+        btnToggleLib.addEventListener('click', () => toggleDrawer(!drawer.classList.contains('open')));
+        btnCloseLib.addEventListener('click', () => toggleDrawer(false));
+
+        function populateComponentList(filterText = "") {
+            libListContainer.innerHTML = "";
+            const term = filterText.toLowerCase();
+
+            Object.entries(ComponentRegistry).forEach(([compName, compData]) => {
+                if (term && !compName.toLowerCase().includes(term)) return;
+
+                const pinCount = Object.keys(compData.pins || {}).length;
+                const card = document.createElement('div');
+                card.className = 'component-card';
+                card.title = `Click to add ${compName} to code`;
+                card.innerHTML = `
+                    <div class="comp-info">
+                        <span class="comp-name">${compName}</span>
+                        <span class="comp-tag">${pinCount} pins available</span>
+                    </div>
+                    <span class="comp-insert-badge">+ Insert</span>
+                `;
+
+                card.addEventListener('click', () => {
+                    const prefix = compName.split('_')[0].toLowerCase();
+                    const snippet = `\n${prefix}1 = ${compName}\n`;
+                    cmEditor.replaceRange(snippet, CodeMirror.Pos(cmEditor.lastLine()));
+                    toggleDrawer(false);
+                    cmEditor.focus();
+                });
+
+                libListContainer.appendChild(card);
+            });
+        }
+
+        libSearchInput.addEventListener('input', (e) => populateComponentList(e.target.value));
+        populateComponentList();
+
+        // --- PARSER & GEOMETRY ---
         let currentAST = { nodes: {}, edges: [] };
         let customPositions = {}; 
         let customWireRoutes = {}; 
         let wireStyle = 'orthogonal';
-        
         let currentScale = 1; let panX = 100, panY = 50;
 
         window.toggleWireStyle = () => { 
@@ -189,15 +399,44 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
         };
         window.zoom = (amount) => { currentScale = Math.max(0.2, Math.min(3, currentScale + amount)); updateTransform(); };
         window.resetZoom = () => { currentScale = 1; panX = 100; panY = 50; updateTransform(); };
+        
         function updateTransform() { 
             document.getElementById('zoom-layer').setAttribute('transform', `translate(${panX}, ${panY}) scale(${currentScale})`); 
             const viewer = document.getElementById('viewer-container');
-            viewer.style.backgroundPosition = `${panX}px ${panY}px`; viewer.style.backgroundSize = `${25 * currentScale}px ${25 * currentScale}px`;
+            viewer.style.backgroundPosition = `${panX}px ${panY}px`; 
+            viewer.style.backgroundSize = `${25 * currentScale}px ${25 * currentScale}px`;
+            document.getElementById('status-zoom').textContent = `Zoom: ${Math.round(currentScale * 100)}%`;
         }
 
+        window.exportSVG = () => {
+            const svgEl = document.getElementById('canvas');
+            const serializer = new XMLSerializer();
+            const svgString = serializer.serializeToString(svgEl);
+            const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'puffer-schematic.svg';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        };
+
         function resolvePin(compDef, pinQuery) {
+            if (!compDef || !compDef.pins) return null;
             if (compDef.pins[pinQuery]) return { name: pinQuery, data: compDef.pins[pinQuery] };
-            for (const [key, data] of Object.entries(compDef.pins)) { if (data.aliases && data.aliases.includes(pinQuery)) return { name: key, data: data }; } return null;
+            
+            const target = pinQuery.toLowerCase();
+            for (const [key, data] of Object.entries(compDef.pins)) {
+                if (key.toLowerCase() === target) return { name: key, data };
+                if (data.aliases) {
+                    for (const a of data.aliases) {
+                        if (a.toLowerCase() === target) return { name: key, data };
+                    }
+                }
+            } 
+            return null;
         }
 
         function parseScript(code) {
@@ -206,28 +445,58 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
                 line = line.trim(); if (!line || line.startsWith('//')) return;
                 
                 if (line.includes('=')) {
-                    let [id, typeStr] = line.split('=').map(s => s.trim()); let type = typeStr, arg = null;
-                    if (typeStr.includes('(')) { let match = typeStr.match(/(.+)\((.+)\)/); if (match) { type = match[1].trim(); arg = match[2].trim(); } }
-                    if (Library[type]) nodes[id] = { id, type, arg, def: Library[type] };
+                    let [id, typeStr] = line.split('=').map(s => s.trim()); 
+                    let type = typeStr, arg = null;
+                    if (typeStr.includes('(')) { 
+                        let match = typeStr.match(/(.+)\((.+)\)/); 
+                        if (match) { type = match[1].trim(); arg = match[2].trim(); } 
+                    }
+                    const found = findComponentDef(type);
+                    if (found) {
+                        nodes[id] = { id, type: found.officialName, arg, def: found.def };
+                    }
                 } else if (line.includes('->')) {
-                    let color = "#58a6ff"; if (line.includes(':')) { const parts = line.split(':'); color = parts[1].trim(); line = parts[0].trim(); }
+                    let colorStr = "#58a6ff"; 
+                    if (line.includes(':')) { 
+                        const parts = line.split(':'); colorStr = parts[1].trim(); line = parts[0].trim(); 
+                    }
+                    const colors = colorStr.split(',').map(c => c.trim()); 
                     
-                    // Allows Multi-Line Parsing via Commas
                     const [fromSide, toSide] = line.split('->').map(s => s.trim());
                     const fromPins = fromSide.split(',').map(s => s.trim());
                     const toPins = toSide.split(',').map(s => s.trim());
                     
-                    fromPins.forEach(f => {
-                        toPins.forEach(t => {
-                            if(f.includes('.') && t.includes('.')){
+                    if (fromPins.length === toPins.length) {
+                        for (let i = 0; i < fromPins.length; i++) {
+                            const f = fromPins[i], t = toPins[i];
+                            if(f.includes('.') && t.includes('.')) {
                                 const [fromNode, fromPin] = f.split('.');
                                 const [toNode, toPin] = t.split('.');
-                                edges.push({ fromNode, fromPin, toNode, toPin, color });
+                                edges.push({ fromNode, fromPin, toNode, toPin, color: colors[i % colors.length] });
+                            }
+                        }
+                    } else if (toPins.length === 1) {
+                        const t = toPins[0];
+                        fromPins.forEach((f, i) => {
+                            if(f.includes('.') && t.includes('.')) {
+                                const [fromNode, fromPin] = f.split('.');
+                                const [toNode, toPin] = t.split('.');
+                                edges.push({ fromNode, fromPin, toNode, toPin, color: colors[i % colors.length] });
                             }
                         });
-                    });
+                    } else if (fromPins.length === 1) {
+                        const f = fromPins[0];
+                        toPins.forEach((t, i) => {
+                            if(f.includes('.') && t.includes('.')) {
+                                const [fromNode, fromPin] = f.split('.');
+                                const [toNode, toPin] = t.split('.');
+                                edges.push({ fromNode, fromPin, toNode, toPin, color: colors[i % colors.length] });
+                            }
+                        });
+                    }
                 }
-            }); return { nodes, edges };
+            }); 
+            return { nodes, edges };
         }
 
         function getRealPin(nodeId, pinData, def) {
@@ -235,6 +504,7 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
             let cx = def.width / 2; let cy = def.height / 2;
             let dx = pinData.x - cx; let dy = pinData.y - cy;
             if (state.flipX) dx = -dx; if (state.flipY) dy = -dy;
+            
             let rot = (state.rotation || 0) * (Math.PI / 180);
             let nx = Math.round(dx * Math.cos(rot) - dy * Math.sin(rot));
             let ny = Math.round(dx * Math.sin(rot) + dy * Math.cos(rot));
@@ -243,24 +513,23 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
 
         function simplifyPath(pts) {
             if (!pts || pts.length <= 2) return pts;
-            
             let p1 = [pts[0]];
-            for(let i=1; i<pts.length; i++) {
-                if(Math.abs(pts[i].x - p1[p1.length-1].x) > 1 || Math.abs(pts[i].y - p1[p1.length-1].y) > 1) {
+            for (let i = 1; i < pts.length; i++) {
+                if (Math.abs(pts[i].x - p1[p1.length - 1].x) > 1 || Math.abs(pts[i].y - p1[p1.length - 1].y) > 1) {
                     p1.push(pts[i]);
                 }
             }
-            if(p1.length <= 2) return p1;
+            if (p1.length <= 2) return p1;
 
             let p2 = [p1[0]];
-            for(let i=1; i<p1.length-1; i++) {
-                let prev = p2[p2.length-1], curr = p1[i], next = p1[i+1];
+            for (let i = 1; i < p1.length - 1; i++) {
+                let prev = p2[p2.length - 1], curr = p1[i], next = p1[i + 1];
                 let isH = Math.abs(prev.y - curr.y) < 2 && Math.abs(curr.y - next.y) < 2;
                 let isV = Math.abs(prev.x - curr.x) < 2 && Math.abs(curr.x - next.x) < 2;
-                if(isH || isV) continue; 
+                if (isH || isV) continue; 
                 p2.push(curr);
             }
-            p2.push(p1[p1.length-1]);
+            p2.push(p1[p1.length - 1]);
             return p2;
         }
 
@@ -272,10 +541,13 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
             return [{x:x1, y:y1}, {x:cp1x, y:y1}, {x:cp1x, y:(y1+y2)/2}, {x:cp2x, y:(y1+y2)/2}, {x:cp2x, y:y2}, {x:x2, y:y2}];
         }
 
+        // --- RENDER ENGINE ---
         function render(ast) {
             const layer = document.getElementById('zoom-layer');
             let componentsSvg = ''; let wiresSvg = ''; let autoX = 400, autoY = 50; 
             
+            document.getElementById('status-counts').textContent = `Components: ${Object.keys(ast.nodes).length} | Wires: ${ast.edges.length}`;
+
             Object.values(ast.nodes).forEach((node) => {
                 if (!customPositions[node.id]) {
                     customPositions[node.id] = { x: autoX, y: autoY, flipX: false, flipY: false, rotation: 0 };
@@ -307,27 +579,45 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
                 const edgeId = `${edge.fromNode}.${edge.fromPin}-${edge.toNode}.${edge.toPin}`;
                 
                 let route = customWireRoutes[edgeId];
+                if (!route) {
+                    route = { points: null, manuallyEdited: false, cpX: undefined, cpY: undefined };
+                    customWireRoutes[edgeId] = route;
+                }
 
                 wiresSvg += `<g class="wire-group" data-edge="${edgeId}">`;
 
                 if (wireStyle === 'orthogonal') {
-                    if (!route || !route.points) {
+                    if (!route.manuallyEdited) {
                         let fIsLeft = fReal.x < fNode.def.width / 2; let tIsLeft = tReal.x < tNode.def.width / 2;
-                        route = { points: simplifyPath(generateDefaultOrthogonal(startX, startY, endX, endY, fIsLeft, tIsLeft)) };
-                        customWireRoutes[edgeId] = route;
-                    }
-                    
-                    let pts = route.points;
-                    
-                    if (pts.length >= 2) {
-                        let isH0 = Math.abs(pts[0].y - pts[1].y) < Math.abs(pts[0].x - pts[1].x);
-                        pts[0] = {x: startX, y: startY}; if (isH0) pts[1].y = startY; else pts[1].x = startX;
-                        let last = pts.length - 1;
-                        let isHLast = Math.abs(pts[last].y - pts[last-1].y) < Math.abs(pts[last].x - pts[last-1].x);
-                        pts[last] = {x: endX, y: endY}; if (isHLast) pts[last-1].y = endY; else pts[last-1].x = endX;
+                        route.points = simplifyPath(generateDefaultOrthogonal(startX, startY, endX, endY, fIsLeft, tIsLeft));
+                    } else {
+                        let pts = route.points;
+                        if (pts && pts.length >= 2) {
+                            if (pts.length === 2 && (Math.abs(startX - endX) > 2 && Math.abs(startY - endY) > 2)) {
+                                let fIsLeft = fReal.x < fNode.def.width / 2; let tIsLeft = tReal.x < tNode.def.width / 2;
+                                pts = simplifyPath(generateDefaultOrthogonal(startX, startY, endX, endY, fIsLeft, tIsLeft));
+                                route.manuallyEdited = false;
+                            } else if (pts.length > 2) {
+                                let isH0 = Math.abs(pts[0].y - pts[1].y) <= Math.abs(pts[0].x - pts[1].x);
+                                pts[0] = {x: startX, y: startY}; 
+                                if (isH0) pts[1].y = startY; else pts[1].x = startX;
+                                
+                                let last = pts.length - 1;
+                                let isHLast = Math.abs(pts[last].y - pts[last-1].y) <= Math.abs(pts[last].x - pts[last-1].x);
+                                pts[last] = {x: endX, y: endY}; 
+                                if (last > 1) {
+                                    if (isHLast) pts[last-1].y = endY; else pts[last-1].x = endX;
+                                }
+                            } else {
+                                pts[0] = {x: startX, y: startY}; pts[1] = {x: endX, y: endY};
+                            }
+                        }
+                        route.points = pts;
                     }
 
-                    if (dragWireId !== edgeId) {
+                    let pts = route.points;
+                    
+                    if (dragWireId !== edgeId && route.manuallyEdited) {
                         pts = simplifyPath(pts);
                         route.points = pts;
                     }
@@ -351,7 +641,7 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
                     wiresSvg += `<path class="wire-visible" d="${pathStr}" fill="none" stroke="${edge.color}" stroke-width="3.5" stroke-linejoin="miter" stroke-linecap="round"/>`;
                 } else {
                     if (!route || route.cpX === undefined) {
-                        route = customWireRoutes[edgeId] = { cpX: (startX + endX) / 2, cpY: (startY + endY) / 2 };
+                        route.cpX = (startX + endX) / 2; route.cpY = (startY + endY) / 2;
                     }
                     let path = `M ${startX} ${startY} Q ${route.cpX} ${route.cpY} ${endX} ${endY}`;
                     wiresSvg += `<path class="wire-hitbox wire-seg-c" d="${path}" data-edge="${edgeId}" data-curve="true"/>`;
@@ -366,7 +656,7 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
             layer.innerHTML = componentsSvg + wiresSvg; 
         }
 
-        // --- INTERACTION & EVENT LISTENERS ---
+        // --- INTERACTION & EVENTS ---
         const svgCanvas = document.getElementById('canvas'); 
         const zoomLayer = document.getElementById('zoom-layer'); 
         const contextMenu = document.getElementById('context-menu');
@@ -404,6 +694,7 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
             if (!rightClickedWire) return;
             let route = customWireRoutes[rightClickedWire];
             if (wireStyle === 'orthogonal' && route && route.points) {
+                route.manuallyEdited = true;
                 let pts = route.points; let mx = rightClickedSvgPos.x, my = rightClickedSvgPos.y;
                 let seg = rightClickedSeg, p1 = pts[seg], p2 = pts[seg+1];
                 let isH = Math.abs(p1.y - p2.y) < Math.abs(p1.x - p2.x);
@@ -427,11 +718,7 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
             const wireHitbox = e.target.closest('.wire-hitbox');
             if (wireHitbox) {
                 dragWireId = wireHitbox.getAttribute('data-edge');
-                
-                if (wireHitbox.getAttribute('data-curve') === "true") {
-                    dragWireMode = 'c';
-                    return;
-                }
+                if (wireHitbox.getAttribute('data-curve') === "true") { dragWireMode = 'c'; return; }
 
                 let segIdx = parseInt(wireHitbox.getAttribute('data-seg'), 10);
                 let route = customWireRoutes[dragWireId];
@@ -470,12 +757,13 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
 
         window.addEventListener('mousemove', (e) => {
             if (isPanning) { panX = e.clientX - startPanX; panY = e.clientY - startPanY; updateTransform(); return; }
-            
             if (!dragWireId && !dragId) return;
             const mousePos = getMouseSvgPos(e);
             
             if (dragWireId && customWireRoutes[dragWireId]) {
                 let route = customWireRoutes[dragWireId];
+                route.manuallyEdited = true;
+
                 if (dragWireMode === 'c') {
                     route.cpX = mousePos.x; route.cpY = mousePos.y;
                 } else if (route.points && route.points[dragWireSeg]) {
@@ -510,9 +798,14 @@ uno.D13, uno.D12, uno.D11 -> sd.SCK, sd.MISO, sd.MOSI : #c084fc
             document.getElementById('viewer-container').style.cursor = 'grab'; 
         });
 
-        cmEditor.on("change", () => { try { currentAST = parseScript(cmEditor.getValue()); render(currentAST); } catch(e) {} });
+        cmEditor.on("change", () => { 
+            try { currentAST = parseScript(cmEditor.getValue()); render(currentAST); } catch(e) {} 
+        });
 
-        updateTransform(); currentAST = parseScript(cmEditor.getValue()); render(currentAST);
+        // Initialize
+        updateTransform(); 
+        currentAST = parseScript(cmEditor.getValue()); 
+        render(currentAST);
     </script>
 </body>
 </html>
